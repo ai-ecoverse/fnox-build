@@ -84,10 +84,10 @@ jobs:
             src: work/fnox
           - platform: windows-arm64
             runner: windows-latest
-            src: C:/fnox
+            src: C:/Windows/fnox-build
           - platform: windows-x64
             runner: windows-latest
-            src: C:/fnox
+            src: C:/Windows/fnox-build
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 75
     env:

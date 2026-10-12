@@ -68,6 +68,16 @@ remap_flags() {
   done
 }
 
+export CPPFLAGS="${CPPFLAGS:+$CPPFLAGS }-DOPENSSL_NO_AUTOLOAD_CONFIG"
+if [ "${platform%%-*}" != "windows" ]; then
+  export OPENSSL_CONFIG_DIR=/var/empty
+fi
+if [ "${platform%%-*}" = "darwin" ]; then
+  MACOSX_DEPLOYMENT_TARGET="$(rustc --print deployment-target --target "$target" | sed 's/^[A-Z_]*=//')"
+  export MACOSX_DEPLOYMENT_TARGET
+fi
+export CROSS_BUILD_ENV_PASSTHROUGH="FNOX_NO_PIE CPPFLAGS OPENSSL_CONFIG_DIR"
+
 echo "building fnox for $platform ($target) with $builder"
 if [ "$builder" = "cargo" ]; then
   CARGO_ENCODED_RUSTFLAGS=""

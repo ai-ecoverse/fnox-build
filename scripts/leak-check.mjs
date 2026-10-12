@@ -13,6 +13,33 @@ const PATTERNS = [
   ['a GitHub Actions runner directory', /runneradmin|\/runner\/work\/|\/Users\/runner\b/],
 ];
 
+const ROOT_ONLY = [
+  /^\/opt\//,
+  /^\/target\//,
+  /^\/var\/empty(\/|$)/,
+  /^[A-Za-z]:[\\/]Windows[\\/]/i,
+];
+const OPENSSL_DIRS = /\b(OPENSSLDIR|ENGINESDIR|MODULESDIR): "([^"]*)"/g;
+
+function opensslProblems(text) {
+  const problems = [];
+  const dirs = [...text.matchAll(OPENSSL_DIRS)];
+  if (!dirs.length) return problems;
+  for (const [, name, dir] of dirs) {
+    if (!ROOT_ONLY.some((prefix) => prefix.test(dir))) {
+      problems.push(
+        `OpenSSL's ${name} is ${JSON.stringify(dir)}, which a user without root could create`
+      );
+    }
+  }
+  if (!text.includes('-DOPENSSL_NO_AUTOLOAD_CONFIG')) {
+    problems.push(
+      'the vendored OpenSSL was built without -DOPENSSL_NO_AUTOLOAD_CONFIG, so it loads openssl.cnf'
+    );
+  }
+  return problems;
+}
+
 const [, , ...files] = process.argv;
 if (!files.length) {
   process.stderr.write('usage: leak-check.mjs <binary>...\n');
@@ -34,6 +61,10 @@ for (const file of files) {
       if (!found.has(what)) found.set(what, { count: 0, sample });
       found.get(what).count += 1;
     }
+  }
+  for (const problem of opensslProblems(text)) {
+    leaks += 1;
+    process.stderr.write(`${file}: ${problem}\n`);
   }
   if (!found.size) {
     process.stdout.write(`${file}: no host paths\n`);
