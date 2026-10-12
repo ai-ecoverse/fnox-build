@@ -4,7 +4,7 @@ import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { generateNotes } from '@semantic-release/release-notes-generator';
-import { FORK, plan, root } from './release-lib.mjs';
+import { HOMESCOOP, plan, REPO, root, sourceLine, UPSTREAM } from './release-lib.mjs';
 
 const { values } = parseArgs({ options: { 'dry-run': { type: 'boolean', default: false } } });
 const dryRun = values['dry-run'];
@@ -16,6 +16,7 @@ function fail(message) {
 }
 
 const result = await plan();
+if (!result.tree) fail('the fnox source is not in work/fnox; run scripts/fetch.sh first');
 if (!dryRun && result.version !== version) {
   fail(
     `the packaged version is ${version}, but the commits on HEAD release ${result.version || 'nothing'}`
@@ -30,11 +31,13 @@ const changes = await generateNotes(
     commits: result.commits,
     lastRelease: result.last ? { gitTag: result.last.tag, version: result.last.version } : {},
     nextRelease: { gitTag: tag, version },
-    options: { repositoryUrl: 'https://github.com/ai-ecoverse/fnox-build' },
+    options: { repositoryUrl: `https://github.com/${REPO}` },
     cwd: root,
   }
 );
-const notes = `fnox ${result.upstream}, built from [${FORK}@${result.ref.slice(0, 12)}](https://github.com/${FORK}/commit/${result.ref}). Verify a download with \`SHA256SUMS\` and \`gh attestation verify <file> --repo ai-ecoverse/fnox-build\`.
+const notes = `fnox ${result.upstream}: [${UPSTREAM} ${result.tag}](https://github.com/${UPSTREAM}/tree/${result.tagSha}) with the patch series of [${HOMESCOOP}@${result.homescoop.slice(0, 12)}](https://github.com/${HOMESCOOP}/tree/${result.homescoop}/packages/wasi-fnox). Verify a download with \`SHA256SUMS\` and \`gh attestation verify <file> --repo ${REPO}\`.
+
+${sourceLine(result.tree)}
 
 ${changes}`;
 const notesFile = join(root, 'dist', 'release-notes.md');

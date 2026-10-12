@@ -1,22 +1,29 @@
 # fnox-build
 
-Native, signed builds of [fnox](https://fnox.jdx.dev), the secret manager by [@jdx](https://github.com/jdx), built from SLICC's fork [ai-ecoverse/fnox](https://github.com/ai-ecoverse/fnox). They are published to npm as `@ai-ecoverse/fnox`.
+Native, signed builds of [fnox](https://fnox.jdx.dev), the secret manager by [@jdx](https://github.com/jdx): upstream jdx/fnox at a release tag, plus SLICC's patch series from [ai-ecoverse/homescoop](https://github.com/ai-ecoverse/homescoop). They are published to npm as `@ai-ecoverse/fnox`.
 
 ```sh
 npx @ai-ecoverse/fnox --version
 npm install -g @ai-ecoverse/fnox
 ```
 
-This repository holds no fnox code. It pins one commit of the fork, builds that commit for six platforms, signs the binaries, tests them, and publishes them. Changes to fnox itself go to the fork.
+This repository holds no fnox code and no patches. It pins an upstream tag and a homescoop commit, applies the patches, builds the result for six platforms, signs the binaries, tests them, and publishes them. Changes to fnox go to homescoop's patch series. They are not offered upstream.
 
 ## The source
 
-- `FNOX_REF` holds one full commit sha of `ai-ecoverse/fnox`, the head of its `slicc/v<major.minor>` branch. Renovate tracks the branch (`slicc/v1.39`) and proposes a new sha when the branch moves.
-- The branch is upstream fnox at a release tag, plus SLICC's patch commits. The fork's `SLICC.md` lists them. The ones that matter on a real OS are:
+- `FNOX_TAG` holds the upstream tag and its commit, `v1.39.0 cc06c75f35bbea98ea594ceba5f3ba94e77a0cdf`. `scripts/fetch.sh` fetches that tag from jdx/fnox and refuses it if it points at another commit.
+- `HOMESCOOP_REF` holds one full commit sha of ai-ecoverse/homescoop. `scripts/fetch.sh` fetches only `packages/wasi-fnox/` and `crates/wasix-command/` at that commit (a sparse, blob-filtered fetch), and runs homescoop's `packages/wasi-fnox/apply.sh <fnox source> <homescoop>`:
+  - it applies every `packages/wasi-fnox/NNNN-*.patch` in filename order, checking each with `git apply --check` first, and fails if one doesn't apply;
+  - it copies homescoop's `crates/wasix-command` into the source, because the patched workspace names it as a path dependency, even natively;
+  - it writes `.slicc-patched`, the list of applied patches.
+- `scripts/fetch.sh` also checks that homescoop's `packages/wasi-fnox/recipe.yaml` patches the same fnox version as `FNOX_TAG`, and that the patched `Cargo.toml` says that version. A new upstream release moves both pins in one commit.
+- homescoop builds `@ai-ecoverse/wasi-fnox`, the WASI build, from the same series. Both builds apply every patch. The patches that matter on a real OS are:
   - **F2:** a `[[proxy.rules]]` `secret` can name a lease credential, and `fnox proxy run` renews it under the same placeholder while the command runs;
   - **F3:** the `command` lease backend runs through `cmd /C` on Windows;
   - the `sealed` provider, which only works inside seven, is not offered by `provider add`.
-- The fork's WASI patches compile out on these targets and change nothing here. homescoop builds the WASI build (`@ai-ecoverse/wasi-fnox`) from the same branch.
+  The WASI patches compile out on these targets.
+- The **source tree** is the git tree hash of the patched source, without fetch.sh's own stamp file (`scripts/source-tree.sh`). Each release records it in its notes as `Source tree: <hash>`.
+- `FNOX_TAG` pins the upstream commit rather than the tag tarball's sha256 (`21669929…` for v1.39.0, the tarball homescoop builds from). Both name the same tree.
 - `rust-toolchain.toml` pins the Rust toolchain for every target. Each build runs `cargo build --release --locked --bin fnox` with fnox's default features: every native provider (age, plain, the OS keychain, 1Password, Bitwarden, Vault, AWS, Azure and GCP KMS and secret stores, KeePass, and the rest), leases, the proxy, the daemon, MCP and the TUI.
 
 ## Platforms
@@ -32,6 +39,9 @@ This repository holds no fnox code. It pins one commit of the fork, builds that 
 
 - **Every GitHub release has all six binaries, plus `SHA256SUMS`.** The binaries are plain executables, not archives, and are named `fnox-<goos>-<goarch>[.exe]` with Go's OS and CPU names, as slicc-cli's releases are. `slicc install fnox` downloads them. `SHA256SUMS` lists every binary, and each binary has a build-provenance attestation from this repository's `release.yml`.
 - The npm package names use Node's CPU names (`x64`).
+- **No host paths in the binaries.** `scripts/build.sh` passes `--remap-path-prefix` for the source directory and for `CARGO_HOME` (each both as given and resolved through symlinks, as on macOS, where `/tmp` is `/private/tmp`), mapping them to `/fnox` and `/cargo`. Then `scripts/leak-check.mjs` scans the binary's strings for home directories (`/Users/…`, `/home/…`, `C:\Users\…`), macOS temporary directories (`/private/tmp`, `/private/var`, `/var/folders`) and GitHub runner paths, and the build fails if it finds any.
+  - The vendored OpenSSL is C, and bakes its install directory under `target/` into the binary, which no remap reaches. So CI builds from a directory outside every home: `/opt/fnox` on macOS and `C:/fnox` on Windows. On Linux, `cross` builds in a container, where the paths are `/project`, `/target` and `/cargo`.
+  - A local build under a home directory fails the check. Set `FNOX_SRC` to a neutral directory, or `FNOX_ALLOW_HOST_PATHS=1` to only warn.
 - The Linux binaries are static (musl), so they run on any distribution. As upstream does, they leave out the FIDO2 provider, whose `hidapi` needs a dynamic `libudev`.
 - `@ai-ecoverse/fnox` is a Node launcher (Node 18 or newer) with the bin `fnox`. It lists the six platform packages as optional dependencies, so npm installs only the one for the current `os` and `cpu`. It runs that binary with the same arguments and stdio, forwards signals, and exits with the binary's exit code. Installing with `--omit=optional` leaves the launcher without a binary, and it says so.
 - The binary reports upstream's version: `fnox --version` prints `fnox 1.39.0`.
@@ -40,8 +50,8 @@ This repository holds no fnox code. It pins one commit of the fork, builds that 
 
 A release is `<fnox version>-slicc.<n>`, for example `1.39.0-slicc.1`. The git tag is `v1.39.0-slicc.1`.
 
-- `<fnox version>` is the `[workspace.package]` version in the fork's `Cargo.toml` at `FNOX_REF`.
-- `<n>` counts this repository's releases of that fnox version, starting at 1. It goes back to 1 when the fork moves to a new upstream release.
+- `<fnox version>` is `FNOX_TAG` without the `v`.
+- `<n>` counts this repository's releases of that fnox version, starting at 1. It goes back to 1 when `FNOX_TAG` moves to a new upstream release.
 - The scheme is valid semver, and versions only go up as long as upstream's do. The planner refuses to release a version lower than the last one.
 - Every npm package of a release has the same version, and the launcher pins its platform packages to it exactly. Releases go to the npm dist-tag `latest`.
 - Because of the `-slicc.<n>` suffix, semver treats every release as a prerelease. `^1.39.0-slicc.1` matches later `1.39.0-slicc.<n>` builds, but not `1.40.0-slicc.1`. Install with `@latest`, or pin the exact version. Renovate users should set `ignoreUnstable: false` for `@ai-ecoverse/fnox`, so that Renovate proposes the next fnox version too.
@@ -51,14 +61,16 @@ A release is `<fnox version>-slicc.<n>`, for example `1.39.0-slicc.1`. The git t
 Releases come from `main`, driven by conventional commits as semantic-release reads them.
 
 - `scripts/release-plan.mjs` finds the last `v*-slicc.*` tag, and runs `@semantic-release/commit-analyzer` (Angular preset) over the commits since. A `feat`, `fix`, `perf` or breaking commit makes a release. `chore`, `docs`, `ci`, `test` and the rest don't.
-- Renovate's bumps of `FNOX_REF` and of the Rust toolchain are `fix(build):` commits, so they release.
+- Renovate bumps `HOMESCOOP_REF` to homescoop's `main` once a day, and the Rust toolchain when Rust releases. Both are `fix(build):` commits, so they release.
+- homescoop's `main` moves for many packages besides fnox. A commit that changes only `HOMESCOOP_REF` doesn't count towards a release if the source tree is the same as the last release's. If nothing else releases, the planner skips the release.
+- `FNOX_TAG` is not bumped by Renovate: a new upstream tag needs a new patch series in homescoop first.
 - The version comes from the scheme above, not from the size of the change.
-- `scripts/release.mjs` writes the notes with `@semantic-release/release-notes-generator`, under a line naming the fnox version and fork commit. It creates the GitHub release and the tag at the released commit, and then publishes npm.
+- `scripts/release.mjs` writes the notes with `@semantic-release/release-notes-generator`, under a line naming the upstream tag and the homescoop commit, and the `Source tree:` line. It creates the GitHub release and the tag at the released commit, and then publishes npm.
 
 `.github/workflows/release.yml` runs on every push to `main`, on pull requests (as a dry run), and by hand (`npm_only`, see below):
 
-1. **plan:** the next version, or nothing to release. A pull request builds as `<fnox version>-dry-run.<run>`.
-2. **build:** the six platforms in parallel. Each fetches the fork at `FNOX_REF` (`scripts/fetch.sh`) and builds it (`scripts/build.sh <platform>`).
+1. **plan:** fetches and patches the source, then works out the next version, or nothing to release. A pull request builds as `<fnox version>-dry-run.<run>`.
+2. **build:** the six platforms in parallel. Each fetches and patches the source (`scripts/fetch.sh`) and builds it (`scripts/build.sh <platform>`).
 3. **test:** the integration tests against each unsigned binary, on its own OS and CPU: macOS arm64 and x64, Linux x64 and arm64, Windows x64 and arm64.
 4. **release:** on macOS, `scripts/package.sh <version>` signs, and writes `SHA256SUMS`.
    - The darwin binaries get a Developer ID signature (hardened runtime, secure timestamp, identifier `ai.sliccy.fnox`) and are notarized. That uses the org's Apple secrets.
@@ -68,7 +80,7 @@ Releases come from `main`, driven by conventional commits as semantic-release re
    - On a pull request, this job packages unsigned and runs `npm publish --dry-run` instead.
 5. **smoke:** each signed binary is checked against `SHA256SUMS`, and its `--version` must be `fnox <fnox version>`. On macOS, the darwin binary must also pass `codesign --verify --strict` with the identifier `ai.sliccy.fnox`, a Developer ID Application authority, the hardened runtime and a secure timestamp, so a release whose darwin binaries are unsigned fails here.
 
-npm publishing uses trusted publishing (OIDC, `--provenance`). There is no npm token. The launcher is published last, once all six platform packages are on the registry.
+npm publishing uses trusted publishing (OIDC, `--provenance`). There is no npm token. Every package is published with `--tag latest`, and the launcher is published last, once all six platform packages are on the registry.
 
 ## Verifying a download
 
@@ -82,7 +94,7 @@ codesign --verify --strict --verbose=2 fnox-darwin-arm64
 
 `test/integration/` drives the built binary with `node --test`. It runs in a scratch `HOME`, with `FNOX_CONFIG_DIR` and `FNOX_STATE_DIR` inside it and the daemon off.
 
-- `fnox --version` prints `fnox <version>`, and in CI it is the fnox version at `FNOX_REF`.
+- `fnox --version` prints `fnox <version>`, and in CI it is the version in `FNOX_TAG`.
 - **plain:** `fnox set` from stdin, then `fnox get`, returns the value.
 - **age:** with a fresh X25519 identity, `fnox set` keeps only ciphertext in `fnox.toml`. `fnox get` decrypts it with `FNOX_AGE_KEY`, and fails with another identity.
 - **lease plus proxy (F2 and F3):**
@@ -132,5 +144,5 @@ These steps need org or npm rights, and are done once:
 
 ## A new upstream release
 
-1. In the fork, branch `slicc/v<major.minor>` from the upstream tag, and carry the patch series over, as the fork's `SLICC.md` says.
-2. Here, change `currentValueTemplate` in `renovate.json` to the new branch, and set `FNOX_REF` to its head, in one `fix(build):` commit. The release is `<new version>-slicc.1`.
+1. In homescoop, carry the patch series over to the new tag in `packages/wasi-fnox/`, and move its `recipe.yaml` version.
+2. Here, set `FNOX_TAG` to the new tag and its commit, and `HOMESCOOP_REF` to the homescoop commit with the new series, in one `fix(build):` commit. The release is `<new version>-slicc.1`.

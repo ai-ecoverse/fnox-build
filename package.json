@@ -2,7 +2,7 @@
   "name": "fnox-build",
   "version": "0.0.0",
   "private": true,
-  "description": "Native, signed builds of SLICC's patched fnox (ai-ecoverse/fnox), published to npm as @ai-ecoverse/fnox",
+  "description": "Native, signed builds of jdx/fnox with SLICC's patches from homescoop, published to npm as @ai-ecoverse/fnox",
   "type": "module",
   "license": "Apache-2.0",
   "repository": {
