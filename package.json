@@ -1,0 +1,51 @@
+{
+  "name": "fnox-build",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Native, signed builds of SLICC's patched fnox (ai-ecoverse/fnox), published to npm as @ai-ecoverse/fnox",
+  "type": "module",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ai-ecoverse/fnox-build.git"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "fledgling": {
+    "provider": "github",
+    "workflow": "release.yml",
+    "repo": "ai-ecoverse/fnox-build",
+    "publish": true,
+    "include": [
+      "@ai-ecoverse/fnox",
+      "@ai-ecoverse/fnox-darwin-arm64",
+      "@ai-ecoverse/fnox-darwin-x64",
+      "@ai-ecoverse/fnox-linux-arm64",
+      "@ai-ecoverse/fnox-linux-x64",
+      "@ai-ecoverse/fnox-windows-arm64",
+      "@ai-ecoverse/fnox-windows-x64"
+    ]
+  },
+  "scripts": {
+    "lint": "slicc-lint && shellcheck scripts/*.sh",
+    "format": "biome check --write .",
+    "test": "node --test --test-concurrency=1 \"test/integration/*.test.mjs\"",
+    "build": "scripts/build.sh",
+    "dist": "FNOX_SIGN=0 scripts/package.sh 0.0.0-dev",
+    "npm:stage": "node scripts/npm-stage.mjs --version 0.0.0-dev",
+    "npm:check": "node scripts/npm-publish.mjs --dry-run",
+    "plan": "node scripts/release-plan.mjs",
+    "claim": "npx fledgling sync -y --new",
+    "trust": "npx fledgling sync -y --skip-publish",
+    "trust:dry": "npx fledgling sync --dry-run -y --skip-publish"
+  },
+  "devDependencies": {
+    "@ai-ecoverse/slicc-shared-web": "1.13.0",
+    "@biomejs/biome": "2.5.15",
+    "@semantic-release/commit-analyzer": "13.0.1",
+    "@semantic-release/release-notes-generator": "14.1.1",
+    "conventional-changelog-angular": "9.4.0",
+    "semver": "7.8.5"
+  }
+}
