@@ -9,7 +9,7 @@ homescoop="${HOMESCOOP_REPO:-https://github.com/ai-ecoverse/homescoop.git}"
 src="${FNOX_SRC:-work/fnox}"
 patches="${FNOX_PATCHES:-work/homescoop}"
 
-read -r tag tag_sha < FNOX_TAG
+read -r tag tag_sha < <(tr -d '\r' < FNOX_TAG)
 ref="$(tr -d '[:space:]' < HOMESCOOP_REF)"
 if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || ! [[ "${tag_sha:-}" =~ ^[0-9a-f]{40}$ ]]; then
   echo "FNOX_TAG must hold '<tag> <commit sha>', such as 'v1.39.0 cc06c75…'" >&2
