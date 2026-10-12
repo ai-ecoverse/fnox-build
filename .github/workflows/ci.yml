@@ -29,7 +29,7 @@ jobs:
       - run: npm run lint
 
       - name: Workflows
-        run: bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7 && ./actionlint -color
+        run: bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.11/scripts/download-actionlint.bash) 1.7.11 && ./actionlint -color
 
       - name: Renovate config
         run: npx --yes --package renovate@44.133.0 -- renovate-config-validator --strict renovate.json
