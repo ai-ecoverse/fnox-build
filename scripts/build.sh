@@ -46,12 +46,49 @@ if [ -z "$builder" ]; then
   esac
 fi
 
+native_path() {
+  if command -v cygpath >/dev/null 2>&1; then
+    cygpath -w "$1"
+  else
+    printf '%s\n' "$1"
+  fi
+}
+
+remap_flags() {
+  local cargo_home="${CARGO_HOME:-$HOME/.cargo}" from to seen=""
+  mkdir -p "$cargo_home"
+  for pair in \
+    "$(cd "$cargo_home" && pwd)=/cargo" "$(cd "$cargo_home" && pwd -P)=/cargo" \
+    "$(cd "$src" && pwd)=/fnox" "$(cd "$src" && pwd -P)=/fnox"; do
+    from="$(native_path "${pair%=*}")"
+    to="${pair##*=}"
+    case "$seen" in *"|$from|"*) continue ;; esac
+    seen="$seen|$from|"
+    printf -- '--remap-path-prefix=%s=%s\n' "$from" "$to"
+  done
+}
+
 echo "building fnox for $platform ($target) with $builder"
+if [ "$builder" = "cargo" ]; then
+  CARGO_ENCODED_RUSTFLAGS=""
+  while IFS= read -r flag; do
+    CARGO_ENCODED_RUSTFLAGS="${CARGO_ENCODED_RUSTFLAGS:+$CARGO_ENCODED_RUSTFLAGS$'\x1f'}$flag"
+  done < <(remap_flags)
+  export CARGO_ENCODED_RUSTFLAGS
+fi
 (
   cd "$src"
   rustup target add "$target"
   "$builder" build --release --locked --bin fnox --target "$target"
 )
+node scripts/leak-check.mjs "$src/target/$target/release/fnox$ext" || {
+  if [ "${FNOX_ALLOW_HOST_PATHS:-0}" = "1" ]; then
+    echo "::warning::the fnox binary contains host paths (FNOX_ALLOW_HOST_PATHS=1)"
+  else
+    echo "::error::the fnox binary contains host paths; build from a neutral FNOX_SRC, or set FNOX_ALLOW_HOST_PATHS=1 for a local build"
+    exit 1
+  fi
+}
 cp "$src/target/$target/release/fnox$ext" "$out/fnox-$platform$ext"
 cp "$src/LICENSE" "$out/LICENSE"
 ls -l "$out/fnox-$platform$ext"

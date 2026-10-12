@@ -38,8 +38,8 @@ const launcherName = `${SCOPE}/fnox`;
 const license = join(values.from, 'LICENSE');
 if (!existsSync(license))
   throw new Error(`missing ${license}, fnox's license from the source it was built from`);
-const fnoxRef = readFileSync(join(root, 'FNOX_REF'), 'utf8').trim();
-const upstream = version.replace(/-slicc\..*$/, '').replace(/-dry-run\..*$/, '');
+const [fnoxTag, fnoxSha] = readFileSync(join(root, 'FNOX_TAG'), 'utf8').trim().split(/\s+/);
+const homescoopRef = readFileSync(join(root, 'HOMESCOOP_REF'), 'utf8').trim();
 
 const common = {
   license: 'MIT',
@@ -49,7 +49,7 @@ const common = {
 
 const readme = `# ${launcherName}
 
-[fnox](https://fnox.jdx.dev), the secret manager by [@jdx](https://github.com/jdx), built natively for macOS, Linux and Windows from SLICC's fork [ai-ecoverse/fnox](https://github.com/ai-ecoverse/fnox) at commit [\`${fnoxRef.slice(0, 12)}\`](https://github.com/ai-ecoverse/fnox/commit/${fnoxRef}) (fnox ${upstream} plus SLICC's carried patches).
+[fnox](https://fnox.jdx.dev), the secret manager by [@jdx](https://github.com/jdx), built natively for macOS, Linux and Windows: [jdx/fnox ${fnoxTag}](https://github.com/jdx/fnox/tree/${fnoxSha}) with SLICC's patch series from [ai-ecoverse/homescoop@${homescoopRef.slice(0, 12)}](https://github.com/ai-ecoverse/homescoop/tree/${homescoopRef}/packages/wasi-fnox).
 
 \`\`\`sh
 npx ${launcherName} --version

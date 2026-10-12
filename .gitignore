@@ -3,3 +3,4 @@ work/
 artifacts/
 dist/
 bin/
+build.log

@@ -42,8 +42,13 @@ jobs:
 
       - run: npm ci
 
+      - name: Fetch the fnox source
+        run: scripts/fetch.sh
+
       - name: Plan
         id: plan
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/release-plan.mjs
 
       - name: Build version
@@ -67,23 +72,35 @@ jobs:
         include:
           - platform: darwin-arm64
             runner: macos-latest
+            src: /opt/fnox
           - platform: darwin-x64
             runner: macos-latest
+            src: /opt/fnox
           - platform: linux-arm64
             runner: ubuntu-latest
+            src: work/fnox
           - platform: linux-x64
             runner: ubuntu-latest
+            src: work/fnox
           - platform: windows-arm64
             runner: windows-latest
+            src: C:/fnox
           - platform: windows-x64
             runner: windows-latest
+            src: C:/fnox
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 75
+    env:
+      FNOX_SRC: ${{ matrix.src }}
     defaults:
       run:
         shell: bash
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Make a build directory outside the runner's home
+        if: runner.os == 'macOS'
+        run: sudo mkdir -p "$FNOX_SRC" && sudo chown "$(id -un)" "$FNOX_SRC"
 
       - name: Select native Perl for vendored OpenSSL
         if: runner.os == 'Windows'
@@ -107,7 +124,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
-          workspaces: work/fnox -> target
+          workspaces: ${{ matrix.src }} -> target
           key: ${{ matrix.platform }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
@@ -208,6 +225,9 @@ jobs:
           merge-multiple: true
           path: artifacts/build
 
+      - name: Fetch the fnox source
+        run: scripts/fetch.sh
+
       - name: Package unsigned
         if: env.DRY_RUN == 'true'
         env:
@@ -235,6 +255,8 @@ jobs:
 
       - name: Check the release
         if: env.DRY_RUN == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           node scripts/npm-publish.mjs --dry-run
           node scripts/release.mjs --dry-run

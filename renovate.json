@@ -4,12 +4,12 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "The fnox source: FNOX_REF pins the head of the fork's patch branch.",
-      "managerFilePatterns": ["/^FNOX_REF$/"],
+      "description": "The patch series: HOMESCOOP_REF pins the homescoop commit whose packages/wasi-fnox patches and crates/wasix-command are applied to jdx/fnox.",
+      "managerFilePatterns": ["/^HOMESCOOP_REF$/"],
       "matchStrings": ["^(?<currentDigest>[0-9a-f]{40})\\s*$"],
-      "depNameTemplate": "fnox",
-      "packageNameTemplate": "https://github.com/ai-ecoverse/fnox",
-      "currentValueTemplate": "slicc/v1.39",
+      "depNameTemplate": "homescoop",
+      "packageNameTemplate": "https://github.com/ai-ecoverse/homescoop",
+      "currentValueTemplate": "main",
       "datasourceTemplate": "git-refs"
     },
     {
@@ -24,11 +24,15 @@
   ],
   "packageRules": [
     {
-      "description": "A new fnox source or toolchain changes the binaries, so its commit is a fix and cuts a release.",
-      "matchDepNames": ["fnox", "rust"],
-      "matchManagers": ["custom.regex"],
+      "description": "A new patch series or toolchain changes the binaries, so its commit is a fix and cuts a release. The release planner skips a homescoop bump that leaves the patched source tree unchanged.",
+      "matchDepNames": ["homescoop", "rust"],
       "semanticCommitType": "fix",
       "semanticCommitScope": "build"
+    },
+    {
+      "description": "homescoop main moves often; take its head once a day.",
+      "matchDepNames": ["homescoop"],
+      "schedule": ["before 6am"]
     }
   ]
 }

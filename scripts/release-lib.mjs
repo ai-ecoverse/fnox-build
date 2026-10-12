@@ -4,11 +4,14 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { analyzeCommits } from '@semantic-release/commit-analyzer';
 import semver from 'semver';
-import { fnoxVersion } from './fnox-version.mjs';
 
 export const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-export const FORK = 'ai-ecoverse/fnox';
+export const REPO = 'ai-ecoverse/fnox-build';
+export const UPSTREAM = 'jdx/fnox';
+export const HOMESCOOP = 'ai-ecoverse/homescoop';
 const TAG = /^v(\d+\.\d+\.\d+)-slicc\.(\d+)$/;
+const SOURCE_LINE = /^Source tree: `([0-9a-f]{40})`/m;
+const PIN_FILES = new Set(['HOMESCOOP_REF']);
 
 const quiet = { log() {}, error() {}, warn() {}, success() {} };
 
@@ -16,26 +19,26 @@ function git(...args) {
   return execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
 }
 
-export function fnoxRef() {
-  const ref = readFileSync(join(root, 'FNOX_REF'), 'utf8').trim();
-  if (!/^[0-9a-f]{40}$/.test(ref))
-    throw new Error(`FNOX_REF must hold one full commit sha, not ${ref}`);
-  return ref;
+export function source() {
+  const [tag, tagSha] = readFileSync(join(root, 'FNOX_TAG'), 'utf8').trim().split(/\s+/);
+  const homescoop = readFileSync(join(root, 'HOMESCOOP_REF'), 'utf8').trim();
+  if (!/^v\d+\.\d+\.\d+$/.test(tag) || !/^[0-9a-f]{40}$/.test(tagSha ?? '')) {
+    throw new Error('FNOX_TAG must hold "<tag> <commit sha>"');
+  }
+  if (!/^[0-9a-f]{40}$/.test(homescoop))
+    throw new Error('HOMESCOOP_REF must hold one full commit sha');
+  return { tag, tagSha, upstream: tag.slice(1), homescoop };
 }
 
-export async function upstreamVersion(ref) {
-  const local = join(root, 'work', 'fnox');
-  if (existsSync(join(local, 'Cargo.toml'))) {
-    const head = execFileSync('git', ['rev-parse', 'HEAD'], {
-      cwd: local,
-      encoding: 'utf8',
-    }).trim();
-    if (head === ref) return fnoxVersion(readFileSync(join(local, 'Cargo.toml'), 'utf8'));
-  }
-  const url = `https://raw.githubusercontent.com/${FORK}/${ref}/Cargo.toml`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(30000) });
-  if (!res.ok) throw new Error(`GET ${url}: ${res.status}`);
-  return fnoxVersion(await res.text());
+export function sourceTree() {
+  if (!existsSync(join(root, 'work', 'fnox', '.fnox-build-source'))) return '';
+  return execFileSync('bash', [join(root, 'scripts', 'source-tree.sh')], {
+    encoding: 'utf8',
+  }).trim();
+}
+
+export function sourceLine(tree) {
+  return `Source tree: \`${tree}\``;
 }
 
 export function releases() {
@@ -59,23 +62,54 @@ export function commitsSince(tag) {
     .filter(Boolean)
     .map((entry) => {
       const [hash, message] = entry.split('\x1f');
-      return { hash, message: message.trim() };
+      const files = git('diff-tree', '--no-commit-id', '--name-only', '-r', '-m', hash)
+        .split('\n')
+        .filter(Boolean);
+      return { hash, message: message.trim(), files };
     });
 }
 
+async function releasedTree(tag) {
+  const headers = { accept: 'application/vnd.github+json' };
+  if (process.env.GITHUB_TOKEN) headers.authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  const res = await fetch(`https://api.github.com/repos/${REPO}/releases/tags/${tag}`, {
+    headers,
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!res.ok) return '';
+  return (await res.json()).body?.match(SOURCE_LINE)?.[1] ?? '';
+}
+
+function onlyPins(commit) {
+  return commit.files.length > 0 && commit.files.every((file) => PIN_FILES.has(file));
+}
+
 export async function plan() {
-  const ref = fnoxRef();
-  const upstream = await upstreamVersion(ref);
+  const pinned = source();
   const all = releases();
   const last = all[0];
   const commits = commitsSince(last?.tag);
-  const type = await analyzeCommits({}, { commits, logger: quiet, cwd: root });
-  const build = 1 + Math.max(0, ...all.filter((r) => r.upstream === upstream).map((r) => r.build));
-  const version = `${upstream}-slicc.${build}`;
+  const tree = sourceTree();
+  const lastTree = last ? await releasedTree(last.tag) : '';
+  const sameSource = Boolean(tree) && tree === lastTree;
+  const counted = sameSource ? commits.filter((commit) => !onlyPins(commit)) : commits;
+  const type = await analyzeCommits({}, { commits: counted, logger: quiet, cwd: root });
+  const build =
+    1 + Math.max(0, ...all.filter((r) => r.upstream === pinned.upstream).map((r) => r.build));
+  const version = `${pinned.upstream}-slicc.${build}`;
   if (type && last && !semver.gt(version, last.version)) {
     throw new Error(
-      `fnox ${upstream} at ${ref} would release ${version}, which is not newer than ${last.version}`
+      `fnox ${pinned.upstream} would release ${version}, which is not newer than ${last.version}`
     );
   }
-  return { ref, upstream, last, commits, type, version: type ? version : '' };
+  return {
+    ...pinned,
+    last,
+    commits,
+    skipped: commits.length - counted.length,
+    tree,
+    sameSource,
+    type,
+    version: type ? version : '',
+  };
 }
