@@ -80,10 +80,14 @@ if [ "${platform%%-*}" = "windows" ]; then
   trim=""
   mkdir -p "${CARGO_HOME:-$HOME/.cargo}"
   for dir in "${CARGO_HOME:-$HOME/.cargo}" "$src"; do
-    trim="$trim /d1trimfile:$(native_path "$(cd "$dir" && pwd)")"
+    dir="$(cd "$dir" && pwd)"
+    trim="$trim /d1trimfile:$(cygpath -w "$dir")"
+    short="$(cygpath -s -w "$dir")"
+    [ "$short" != "$(cygpath -w "$dir")" ] && trim="$trim /d1trimfile:$short"
   done
-  export CFLAGS="${CFLAGS:+$CFLAGS }${trim# }"
-  export CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }${trim# }"
+  target_var="$(printf '%s' "$target" | tr '-' '_')"
+  export "CFLAGS_$target_var=${trim# }"
+  export "CXXFLAGS_$target_var=${trim# }"
 fi
 export CROSS_BUILD_ENV_PASSTHROUGH="FNOX_NO_PIE CPPFLAGS OPENSSL_CONFIG_DIR"
 
