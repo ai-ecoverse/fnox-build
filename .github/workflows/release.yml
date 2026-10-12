@@ -269,13 +269,13 @@ jobs:
           - runner: macos-latest
             asset: fnox-darwin-arm64
           - runner: macos-15-intel
-            asset: fnox-darwin-x64
+            asset: fnox-darwin-amd64
           - runner: ubuntu-latest
-            asset: fnox-linux-x64
+            asset: fnox-linux-amd64
           - runner: ubuntu-24.04-arm
             asset: fnox-linux-arm64
           - runner: windows-latest
-            asset: fnox-windows-x64.exe
+            asset: fnox-windows-amd64.exe
           - runner: windows-11-arm
             asset: fnox-windows-arm64.exe
     runs-on: ${{ matrix.runner }}

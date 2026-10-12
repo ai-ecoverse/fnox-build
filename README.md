@@ -21,15 +21,17 @@ This repository holds no fnox code. It pins one commit of the fork, builds that 
 
 ## Platforms
 
-| platform | Rust target | built on | npm package |
-|---|---|---|---|
-| `darwin-arm64` | `aarch64-apple-darwin` | macOS | `@ai-ecoverse/fnox-darwin-arm64` |
-| `darwin-x64` | `x86_64-apple-darwin` | macOS | `@ai-ecoverse/fnox-darwin-x64` |
-| `linux-arm64` | `aarch64-unknown-linux-musl` | Linux, with `cross` | `@ai-ecoverse/fnox-linux-arm64` |
-| `linux-x64` | `x86_64-unknown-linux-musl` | Linux, with `cross` | `@ai-ecoverse/fnox-linux-x64` |
-| `windows-arm64` | `aarch64-pc-windows-msvc` | Windows | `@ai-ecoverse/fnox-windows-arm64` |
-| `windows-x64` | `x86_64-pc-windows-msvc` | Windows | `@ai-ecoverse/fnox-windows-x64` |
+| platform | Rust target | built on | release asset | npm package |
+|---|---|---|---|---|
+| `darwin-arm64` | `aarch64-apple-darwin` | macOS | `fnox-darwin-arm64` | `@ai-ecoverse/fnox-darwin-arm64` |
+| `darwin-x64` | `x86_64-apple-darwin` | macOS | `fnox-darwin-amd64` | `@ai-ecoverse/fnox-darwin-x64` |
+| `linux-arm64` | `aarch64-unknown-linux-musl` | Linux, with `cross` | `fnox-linux-arm64` | `@ai-ecoverse/fnox-linux-arm64` |
+| `linux-x64` | `x86_64-unknown-linux-musl` | Linux, with `cross` | `fnox-linux-amd64` | `@ai-ecoverse/fnox-linux-x64` |
+| `windows-arm64` | `aarch64-pc-windows-msvc` | Windows | `fnox-windows-arm64.exe` | `@ai-ecoverse/fnox-windows-arm64` |
+| `windows-x64` | `x86_64-pc-windows-msvc` | Windows | `fnox-windows-amd64.exe` | `@ai-ecoverse/fnox-windows-x64` |
 
+- **Every GitHub release has all six binaries, plus `SHA256SUMS`.** The binaries are plain executables, not archives, and are named `fnox-<goos>-<goarch>[.exe]` with Go's OS and CPU names, as slicc-cli's releases are. `slicc install fnox` downloads them. `SHA256SUMS` lists every binary, and each binary has a build-provenance attestation from this repository's `release.yml`.
+- The npm package names use Node's CPU names (`x64`).
 - The Linux binaries are static (musl), so they run on any distribution. As upstream does, they leave out the FIDO2 provider, whose `hidapi` needs a dynamic `libudev`.
 - `@ai-ecoverse/fnox` is a Node launcher (Node 18 or newer) with the bin `fnox`. It lists the six platform packages as optional dependencies, so npm installs only the one for the current `os` and `cpu`. It runs that binary with the same arguments and stdio, forwards signals, and exits with the binary's exit code. Installing with `--omit=optional` leaves the launcher without a binary, and it says so.
 - The binary reports upstream's version: `fnox --version` prints `fnox 1.39.0`.
@@ -62,7 +64,7 @@ Releases come from `main`, driven by conventional commits as semantic-release re
    - The darwin binaries get a Developer ID signature (hardened runtime, secure timestamp, identifier `ai.sliccy.fnox`) and are notarized. That uses the org's Apple secrets.
    - The Windows binaries get an Authenticode signature through Azure Trusted Signing (jsign). That happens only when all the `AZURE_*` secrets are set. Until then they stay unsigned, with a warning.
    - `scripts/npm-stage.mjs` stages the seven npm packages.
-   - The job attests build provenance for every file in `SHA256SUMS`, creates the GitHub release with the six binaries and `SHA256SUMS`, and publishes npm. Publishing to npm also needs the repository variable `FNOX_NPM_PUBLISH=true`. Without it, the release is GitHub-only and a notice says so.
+   - The job attests build provenance for every file in `SHA256SUMS`, creates the GitHub release with the six binaries (under their release asset names) and `SHA256SUMS`, and publishes npm. Publishing to npm also needs the repository variable `FNOX_NPM_PUBLISH=true`. Without it, the release is GitHub-only and a notice says so.
    - On a pull request, this job packages unsigned and runs `npm publish --dry-run` instead.
 5. **smoke:** each signed binary is checked against `SHA256SUMS`, and its `--version` must be `fnox <fnox version>`.
 
@@ -72,7 +74,7 @@ npm publishing uses trusted publishing (OIDC, `--provenance`). There is no npm t
 
 ```sh
 shasum -a 256 -c SHA256SUMS --ignore-missing
-gh attestation verify fnox-linux-x64 --repo ai-ecoverse/fnox-build
+gh attestation verify fnox-linux-amd64 --repo ai-ecoverse/fnox-build
 codesign --verify --strict --verbose=2 fnox-darwin-arm64
 ```
 
