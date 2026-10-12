@@ -66,7 +66,7 @@ Releases come from `main`, driven by conventional commits as semantic-release re
    - `scripts/npm-stage.mjs` stages the seven npm packages.
    - The job attests build provenance for every file in `SHA256SUMS`, creates the GitHub release with the six binaries (under their release asset names) and `SHA256SUMS`, and publishes npm. Publishing to npm also needs the repository variable `FNOX_NPM_PUBLISH=true`. Without it, the release is GitHub-only and a notice says so.
    - On a pull request, this job packages unsigned and runs `npm publish --dry-run` instead.
-5. **smoke:** each signed binary is checked against `SHA256SUMS`, and its `--version` must be `fnox <fnox version>`.
+5. **smoke:** each signed binary is checked against `SHA256SUMS`, and its `--version` must be `fnox <fnox version>`. On macOS, the darwin binary must also pass `codesign --verify --strict` with the identifier `ai.sliccy.fnox`, a Developer ID Application authority, the hardened runtime and a secure timestamp, so a release whose darwin binaries are unsigned fails here.
 
 npm publishing uses trusted publishing (OIDC, `--provenance`). There is no npm token. The launcher is published last, once all six platform packages are on the registry.
 
