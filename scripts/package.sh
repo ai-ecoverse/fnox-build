@@ -12,7 +12,7 @@ fi
 version="${version#v}"
 from="artifacts/build"
 out="artifacts/release"
-assets="fnox-darwin-arm64 fnox-darwin-x64 fnox-linux-arm64 fnox-linux-x64 fnox-windows-arm64.exe fnox-windows-x64.exe"
+assets="fnox-darwin-arm64:fnox-darwin-arm64 fnox-darwin-x64:fnox-darwin-amd64 fnox-linux-arm64:fnox-linux-arm64 fnox-linux-x64:fnox-linux-amd64 fnox-windows-arm64.exe:fnox-windows-arm64.exe fnox-windows-x64.exe:fnox-windows-amd64.exe"
 jsign_version="7.5"
 jsign_sha256="602a51c3545a6dc4fb99bd2ea7152b26d1345916d0c93ddfbd5936cb735af91c"
 work="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/fnox-package.XXXXXX")"
@@ -37,12 +37,15 @@ sha256() {
 collect() {
   rm -rf "$out"
   mkdir -p "$out" dist
-  for asset in $assets; do
-    if [ ! -f "$from/$asset" ]; then
-      echo "::error::missing $from/$asset; run scripts/build.sh for every platform first"
+  local pair built asset
+  for pair in $assets; do
+    built="${pair%%:*}"
+    asset="${pair#*:}"
+    if [ ! -f "$from/$built" ]; then
+      echo "::error::missing $from/$built; run scripts/build.sh for every platform first"
       exit 1
     fi
-    cp "$from/$asset" "$out/$asset"
+    cp "$from/$built" "$out/$asset"
     chmod +x "$out/$asset"
   done
   cp "$from/LICENSE" "$out/LICENSE"
@@ -81,7 +84,7 @@ import_p12() {
 notarize() {
   local key="$work/AuthKey.p8" zip="$work/notarize.zip" result="$work/notarize.json"
   printf '%s' "$APPLE_API_KEY_P8_BASE64" | base64 --decode > "$key"
-  (cd "$out" && zip -q "$zip" fnox-darwin-arm64 fnox-darwin-x64)
+  (cd "$out" && zip -q "$zip" fnox-darwin-arm64 fnox-darwin-amd64)
   echo "notarizing the darwin binaries"
   xcrun notarytool submit "$zip" --key "$key" --key-id "$APPLE_API_KEY_ID" \
     --issuer "$APPLE_API_KEY_ISSUER_ID" --wait --timeout 30m --output-format json > "$result" || true
@@ -115,7 +118,7 @@ sign_macos() {
     echo "::error::no Developer ID Application identity in the certificate"
     exit 1
   fi
-  for bin in fnox-darwin-arm64 fnox-darwin-x64; do
+  for bin in fnox-darwin-arm64 fnox-darwin-amd64; do
     echo "signing $bin"
     codesign --force --timestamp --options runtime --identifier ai.sliccy.fnox \
       --keychain "$keychain" --sign "$identity" "$out/$bin"
@@ -172,7 +175,7 @@ sign_windows() {
     --alias "$AZURE_TRUSTED_SIGNING_ACCOUNT/$AZURE_TRUSTED_SIGNING_PROFILE" \
     --tsaurl http://timestamp.acs.microsoft.com --tsmode RFC3161 \
     --name fnox --url https://github.com/ai-ecoverse/fnox-build \
-    "$out/fnox-windows-arm64.exe" "$out/fnox-windows-x64.exe"
+    "$out/fnox-windows-arm64.exe" "$out/fnox-windows-amd64.exe"
 }
 
 checksums() {
