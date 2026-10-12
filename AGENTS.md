@@ -1,0 +1,3 @@
+# fnox-build
+
+Builds, signs and publishes native fnox from SLICC's fork `ai-ecoverse/fnox` at the sha in `FNOX_REF`, for macOS, Linux (static musl) and Windows on arm64 and x64, as `@ai-ecoverse/fnox` plus `@ai-ecoverse/fnox-<os>-<arch>`. Patches go to the fork, never here. README.md is the spec; keep it in step. No comments in any file. No CLAUDE.md. Tests live in `test/integration/` and drive the built binary. `npm run lint` and `npm test` must pass. Versions are `<fnox version>-slicc.<n>`, cut from `main` by `scripts/release-plan.mjs` from conventional commits. Never move or delete a pushed tag.

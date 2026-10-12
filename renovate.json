@@ -1,0 +1,34 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["github>ai-ecoverse/slicc-shared-web"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "The fnox source: FNOX_REF pins the head of the fork's patch branch.",
+      "managerFilePatterns": ["/^FNOX_REF$/"],
+      "matchStrings": ["^(?<currentDigest>[0-9a-f]{40})\\s*$"],
+      "depNameTemplate": "fnox",
+      "packageNameTemplate": "https://github.com/ai-ecoverse/fnox",
+      "currentValueTemplate": "slicc/v1.39",
+      "datasourceTemplate": "git-refs"
+    },
+    {
+      "customType": "regex",
+      "description": "The Rust toolchain every target is built with.",
+      "managerFilePatterns": ["/^rust-toolchain\\.toml$/"],
+      "matchStrings": ["channel = \"(?<currentValue>\\d+\\.\\d+\\.\\d+)\""],
+      "depNameTemplate": "rust",
+      "packageNameTemplate": "rust-lang/rust",
+      "datasourceTemplate": "github-releases"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "A new fnox source or toolchain changes the binaries, so its commit is a fix and cuts a release.",
+      "matchDepNames": ["fnox", "rust"],
+      "matchManagers": ["custom.regex"],
+      "semanticCommitType": "fix",
+      "semanticCommitScope": "build"
+    }
+  ]
+}
