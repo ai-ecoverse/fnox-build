@@ -299,6 +299,21 @@ jobs:
           echo "$out"
           test "$out" = "fnox $UPSTREAM"
 
+      - name: Check the macOS signature
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          ASSET: ${{ matrix.asset }}
+        run: |
+          cd artifacts/release
+          codesign --verify --strict --verbose=2 "$ASSET"
+          details="$(codesign -dv --verbose=4 "$ASSET" 2>&1)"
+          echo "$details"
+          grep -q '^Identifier=ai.sliccy.fnox$' <<< "$details"
+          grep -q '^Authority=Developer ID Application:' <<< "$details"
+          grep -q 'flags=.*runtime' <<< "$details"
+          grep -q '^Timestamp=' <<< "$details"
+
   npm-only:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.npm_only != '' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
