@@ -41,7 +41,7 @@
     "trust:dry": "npx fledgling sync --dry-run -y --skip-publish"
   },
   "devDependencies": {
-    "@ai-ecoverse/slicc-shared-web": "1.13.0",
+    "@ai-ecoverse/slicc-shared-web": "1.13.1",
     "@biomejs/biome": "2.5.15",
     "@semantic-release/commit-analyzer": "13.0.1",
     "@semantic-release/release-notes-generator": "14.1.1",
