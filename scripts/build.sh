@@ -80,7 +80,7 @@ if [ "${platform%%-*}" = "windows" ]; then
   trim=""
   mkdir -p "${CARGO_HOME:-$HOME/.cargo}"
   for dir in "${CARGO_HOME:-$HOME/.cargo}" "$src"; do
-    trim="$trim /d1trimfile:$(native_path "$(cd "$dir" && pwd)")\\"
+    trim="$trim /d1trimfile:$(native_path "$(cd "$dir" && pwd)")"
   done
   export CFLAGS="${CFLAGS:+$CFLAGS }${trim# }"
   export CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }${trim# }"
