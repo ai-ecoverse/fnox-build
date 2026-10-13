@@ -198,8 +198,58 @@ jobs:
           chmod +x "$FNOX_BIN"
           npm test
 
+  installer:
+    needs: [plan, build]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ubuntu, curl
+            runner: ubuntu-latest
+            platform: linux-x64
+            alpine: false
+          - name: macos, curl
+            runner: macos-latest
+            platform: darwin-arm64
+            alpine: false
+          - name: alpine, busybox sh and wget
+            runner: ubuntu-latest
+            platform: linux-x64
+            alpine: true
+    name: installer (${{ matrix.name }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    env:
+      FNOX_BIN: artifacts/build/fnox-${{ matrix.platform }}
+      FNOX_UPSTREAM_VERSION: ${{ needs.plan.outputs.upstream }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        if: ${{ !matrix.alpine }}
+        with:
+          node-version: 24
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: build-${{ matrix.platform }}
+          path: artifacts/build
+
+      - run: chmod +x "$FNOX_BIN"
+
+      - name: Install from local assets
+        if: ${{ !matrix.alpine }}
+        run: node --test test/integration/install.test.mjs
+
+      - name: Install from local assets in alpine
+        if: ${{ matrix.alpine }}
+        run: |
+          docker run --rm -v "$PWD:/w" -w /w -e FNOX_BIN -e FNOX_UPSTREAM_VERSION \
+            node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 \
+            sh -c 'set -e; ! command -v curl; command -v wget; readlink -f "$(command -v sh)"; node --test test/integration/install.test.mjs'
+
   release:
-    needs: [plan, test]
+    needs: [plan, test, installer]
     runs-on: macos-latest
     timeout-minutes: 60
     permissions:
@@ -341,6 +391,49 @@ jobs:
           grep -q '^Authority=Developer ID Application:' <<< "$details"
           grep -q 'flags=.*runtime' <<< "$details"
           grep -q '^Timestamp=' <<< "$details"
+
+  install-smoke:
+    needs: [plan, release]
+    if: github.event_name != 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ubuntu, curl
+            runner: ubuntu-latest
+            asset: fnox-linux-amd64
+            alpine: false
+          - name: macos, curl
+            runner: macos-latest
+            asset: fnox-darwin-arm64
+            alpine: false
+          - name: alpine, busybox sh and wget
+            runner: ubuntu-latest
+            asset: fnox-linux-amd64
+            alpine: true
+    name: install-smoke (${{ matrix.name }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    env:
+      ASSET: ${{ matrix.asset }}
+      TAG: v${{ needs.plan.outputs.build_version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: fnox-release
+
+      - name: Run the documented one-liner against releases/latest
+        if: ${{ !matrix.alpine }}
+        run: scripts/install-smoke.sh "$ASSET" artifacts/release/SHA256SUMS "$TAG"
+
+      - name: Run the one-liner against releases/latest in alpine
+        if: ${{ matrix.alpine }}
+        run: |
+          docker run --rm -v "$PWD:/w" -w /w -e ASSET -e TAG \
+            alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8 \
+            sh -c 'set -e; ! command -v curl; scripts/install-smoke.sh "$ASSET" artifacts/release/SHA256SUMS "$TAG"'
 
   npm-only:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.npm_only != '' && github.ref == 'refs/heads/main' }}

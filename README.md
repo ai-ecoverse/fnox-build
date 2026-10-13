@@ -2,10 +2,31 @@
 
 Native, signed builds of [fnox](https://fnox.jdx.dev), the secret manager by [@jdx](https://github.com/jdx): upstream jdx/fnox at a release tag, plus SLICC's patch series from [ai-ecoverse/homescoop](https://github.com/ai-ecoverse/homescoop). They are published to npm as `@ai-ecoverse/fnox`.
 
+## Install
+
+```sh
+curl -fsSL https://github.com/ai-ecoverse/fnox-build/releases/latest/download/install.sh | sh
+```
+
+This installs **SLICC's patched build of fnox**: upstream jdx/fnox v1.39.0 plus homescoop's patches. It is not upstream fnox. It installs as `fnox`, so if an upstream fnox is also on your `PATH`, whichever comes first wins; the installer says so when another `fnox` shadows the one it installed.
+
+With npm instead (Node 18 or newer):
+
 ```sh
 npx @ai-ecoverse/fnox --version
 npm install -g @ai-ecoverse/fnox
 ```
+
+`install.sh` is for macOS and Linux. On Windows, use npm, or download `fnox-windows-<arch>.exe` from the release.
+
+- Without `curl`, use `wget -qO- https://github.com/ai-ecoverse/fnox-build/releases/latest/download/install.sh | sh`. It runs in any POSIX `sh` (busybox too), with `curl` or `wget`, and `sha256sum` or `shasum -a 256`.
+- It installs into `INSTALL_DIR`, by default `$HOME/.local/bin`, and the latest release, or `VERSION` (`1.39.0-slicc.3` or `v1.39.0-slicc.3`). The flags `sh -s -- --version X --dir D` do the same, and `--help` lists them.
+- It picks `fnox-<darwin|linux>-<amd64|arm64>` (`x86_64` and `amd64` are `amd64`, `arm64` and `aarch64` are `arm64`; under Rosetta on an Apple silicon Mac it picks `arm64`). Other systems and CPUs exit 1 and point at npm.
+- It downloads the binary and the release's `SHA256SUMS`, and refuses to install if the checksum differs or `SHA256SUMS` has no entry for the binary.
+- It writes a temporary file in the target directory, makes it mode 755, and moves it over `fnox`, so a re-run upgrades or downgrades in place.
+- It then prints `fnox --version`, and, if the directory isn't on `PATH`, one line saying how to add it.
+- It never uses `sudo`, never edits shell startup files, and sends no telemetry.
+- `SLICC_INSTALL_BASE_URL` replaces `https://github.com/ai-ecoverse/fnox-build/releases` as the download base, for tests only. The installer fetches `<base>/latest/download/<file>`, or `<base>/download/v<version>/<file>`.
 
 This repository holds no fnox code and no patches. It pins an upstream tag and a homescoop commit, applies the patches, builds the result for six platforms, signs the binaries, tests them, and publishes them. Changes to fnox go to homescoop's patch series. They are not offered upstream.
 
@@ -37,7 +58,8 @@ This repository holds no fnox code and no patches. It pins an upstream tag and a
 | `windows-arm64` | `aarch64-pc-windows-msvc` | Windows | `fnox-windows-arm64.exe` | `@ai-ecoverse/fnox-windows-arm64` |
 | `windows-x64` | `x86_64-pc-windows-msvc` | Windows | `fnox-windows-amd64.exe` | `@ai-ecoverse/fnox-windows-x64` |
 
-- **Every GitHub release has all six binaries, plus `SHA256SUMS`.** The binaries are plain executables, not archives, and are named `fnox-<goos>-<goarch>[.exe]` with Go's OS and CPU names, as slicc-cli's releases are. `slicc install fnox` downloads them. `SHA256SUMS` lists every binary, and each binary has a build-provenance attestation from this repository's `release.yml`.
+- **Every GitHub release has all six binaries, plus `SHA256SUMS` and `install.sh`**, the installer from this repository's root. Each release is marked as the latest, so `releases/latest/download/` always serves a release with binaries.
+- The binaries are plain executables, not archives, and are named `fnox-<goos>-<goarch>[.exe]` with Go's OS and CPU names, as slicc-cli's releases are. `slicc install fnox` downloads them. `SHA256SUMS` lists every binary, and each binary has a build-provenance attestation from this repository's `release.yml`.
 - The npm package names use Node's CPU names (`x64`).
 - **No host paths in the binaries.** `scripts/build.sh` passes `--remap-path-prefix` for the source directory and for `CARGO_HOME` (each both as given and resolved through symlinks, as on macOS, where `/tmp` is `/private/tmp`), mapping them to `/fnox` and `/cargo`. C code keeps its own `__FILE__` paths, and on Windows they're under `CARGO_HOME` (aws-lc-sys). No compiler flag trims them for both `cl` and `clang`, which arm64 builds use for ring. So Windows CI also moves `CARGO_HOME` to `C:\Windows\fnox-cargo`, a directory only an administrator can create. Then `scripts/leak-check.mjs` scans the binary's strings for home directories (`/Users/…`, `/home/…`, `C:\Users\…`), macOS temporary directories (`/private/tmp`, `/private/var`, `/var/folders`) and GitHub runner paths, and the build fails if it finds any.
 - **The vendored OpenSSL** (SQLCipher's, and native-tls's on Linux) can't load anything from a directory a user could plant files in:
@@ -77,13 +99,16 @@ Releases come from `main`, driven by conventional commits as semantic-release re
 1. **plan:** fetches and patches the source, then works out the next version, or nothing to release. A pull request builds as `<fnox version>-dry-run.<run>`.
 2. **build:** the six platforms in parallel. Each fetches and patches the source (`scripts/fetch.sh`) and builds it (`scripts/build.sh <platform>`).
 3. **test:** the integration tests against each unsigned binary, on its own OS and CPU: macOS arm64 and x64, Linux x64 and arm64, Windows x64 and arm64.
+   - **installer**, alongside: `test/integration/install.test.mjs` runs `install.sh` against the freshly built binary, served locally through `SLICC_INSTALL_BASE_URL`, on ubuntu-latest and macos-latest with `curl`, and in an `alpine` container with busybox `sh` and `wget` only (no `curl`).
 4. **release:** on macOS, `scripts/package.sh <version>` signs, and writes `SHA256SUMS`.
    - The darwin binaries get a Developer ID signature (hardened runtime, secure timestamp, identifier `ai.sliccy.fnox`) and are notarized. That uses the org's Apple secrets.
    - The Windows binaries get an Authenticode signature through Azure Trusted Signing (jsign). That happens only when all the `AZURE_*` secrets are set. Until then they stay unsigned, with a warning.
    - `scripts/npm-stage.mjs` stages the seven npm packages.
    - The job attests build provenance for every file in `SHA256SUMS`, creates the GitHub release with the six binaries (under their release asset names) and `SHA256SUMS`, and publishes npm. Publishing to npm also needs the repository variable `FNOX_NPM_PUBLISH=true`. Without it, the release is GitHub-only and a notice says so.
+   - The release also carries `install.sh`, and is created with `--latest`.
    - On a pull request, this job packages unsigned and runs `npm publish --dry-run` instead.
 5. **smoke:** each signed binary is checked against `SHA256SUMS`, and its `--version` must be `fnox <fnox version>`. On macOS, the darwin binary must also pass `codesign --verify --strict` with the identifier `ai.sliccy.fnox`, a Developer ID Application authority, the hardened runtime and a secure timestamp, so a release whose darwin binaries are unsigned fails here.
+6. **install-smoke:** `scripts/install-smoke.sh` runs the documented one-liner against `releases/latest` on ubuntu-latest and macos-latest with `curl`, and in `alpine` with `wget`. The installed `fnox` must match this release's `SHA256SUMS` (it retries for a few minutes while `latest` catches up), and `VERSION=<tag>` must install the same binary.
 
 npm publishing uses trusted publishing (OIDC, `--provenance`). There is no npm token. Every package is published with `--tag latest`, and the launcher is published last, once all six platform packages are on the registry.
 
@@ -100,6 +125,7 @@ codesign --verify --strict --verbose=2 fnox-darwin-arm64
 `test/integration/` drives the built binary with `node --test`. It runs in a scratch `HOME`, with `FNOX_CONFIG_DIR` and `FNOX_STATE_DIR` inside it and the daemon off.
 
 - `fnox --version` prints `fnox <version>`, and in CI it is the version in `FNOX_TAG`.
+- **install.sh** (skipped on Windows): from a local server holding the binary under its release asset name and a `SHA256SUMS`, it installs the latest release into `INSTALL_DIR` with mode 755 and prints the binary's `--version`; a re-run leaves the same single file; `--version`/`--dir` and `VERSION` fetch from the tag; it replaces an existing `fnox`; it defaults to `~/.local/bin`; it prints the `PATH` hint only when the directory isn't on `PATH`, and a note when another `fnox` shadows it; it refuses a tampered binary and a `SHA256SUMS` without its entry, leaving the old `fnox` and no temporary file; `aarch64` fetches `fnox-linux-arm64`; another OS exits 1 pointing at npm; `--help` works and an unknown flag exits 2.
 - **plain:** `fnox set` from stdin, then `fnox get`, returns the value.
 - **age:** with a fresh X25519 identity, `fnox set` keeps only ciphertext in `fnox.toml`. `fnox get` decrypts it with `FNOX_AGE_KEY`, and fails with another identity.
 - **lease plus proxy (F2 and F3):**
@@ -128,7 +154,7 @@ npm test
 
 | command | does |
 |---|---|
-| `npm run lint` | `slicc-lint` (Biome, no comments, no committed unit tests, AGENTS.md) and `shellcheck` |
+| `npm run lint` | `slicc-lint` (Biome, no comments, no committed unit tests, AGENTS.md), `shellcheck` on `scripts/`, and `shellcheck -s sh install.sh` |
 | `npm test` | the integration tests |
 | `npm run build` | `scripts/build.sh` for the host platform. `scripts/build.sh <platform>` builds another; Linux musl targets use `cross` on Linux |
 | `npm run dist` | `scripts/package.sh` unsigned, from `artifacts/build/` into `artifacts/release/` |
