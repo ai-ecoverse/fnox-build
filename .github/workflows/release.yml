@@ -118,6 +118,12 @@ jobs:
       - name: Install Rust
         run: rustup toolchain install
 
+      - name: Use a cargo home outside the runner's home
+        if: runner.os == 'Windows'
+        run: |
+          mkdir -p /c/Windows/fnox-cargo
+          echo 'CARGO_HOME=C:/Windows/fnox-cargo' >> "$GITHUB_ENV"
+
       - name: Install cross
         if: runner.os == 'Linux'
         run: cargo install cross --locked --version 0.2.5
