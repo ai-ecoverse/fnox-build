@@ -48,6 +48,7 @@ const assets = readdirSync(join(root, 'artifacts', 'release'))
   .filter((name) => name.startsWith('fnox-') || name === 'SHA256SUMS')
   .map((name) => join(root, 'artifacts', 'release', name));
 if (assets.length !== 7) fail(`expected 6 binaries and SHA256SUMS, found ${assets.length} assets`);
+assets.push(join(root, 'install.sh'));
 if (dryRun) {
   process.stdout.write(`\nwould create ${tag} at ${head} with ${assets.length} assets\n`);
   process.exit(0);
